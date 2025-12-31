@@ -1,0 +1,6 @@
+# Excel source file (keep local only)
+*.xlsx
+
+# Python cache
+__pycache__/
+*.pyc
