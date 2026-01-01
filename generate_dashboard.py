@@ -326,7 +326,7 @@ html_content += """
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
                     <div>
                         <label style="display: block; margin-bottom: 10px; font-weight: 600;">Event:</label>
-                        <select id="progressionEvent" class="search-box" onchange="updateProgression()">
+                        <select id="progressionEvent" class="search-box">
                             <option value="">-- Select Event --</option>
 """
 
@@ -341,7 +341,7 @@ html_content += """
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 10px; font-weight: 600;">Athletes (hold Ctrl/Cmd to select multiple):</label>
-                        <select id="progressionAthletes" class="search-box" multiple style="height: 150px;" onchange="updateProgression()">
+                        <select id="progressionAthletes" class="search-box" multiple style="height: 150px;">
 """
 
 # Add athlete options for progression
@@ -354,6 +354,7 @@ html_content += """
                         </select>
                     </div>
                 </div>
+                <button onclick="updateProgression()" style="width: 100%; padding: 15px; background: #667eea; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 20px;">Generate Chart</button>
                 <div id="progressionChart" style="width: 100%; height: 500px;"></div>
             </div>
         </div>
@@ -462,12 +463,24 @@ html_content += """
             }
 
             // Filter results for selected event and athletes
+            // Convert EVENT to string for comparison since some may be numbers
             const eventResults = allResults.filter(r =>
-                r.EVENT === event && selectedAthletes.includes(r.ATHLETE) && r.DATE
+                String(r.EVENT) === String(event) && selectedAthletes.includes(r.ATHLETE) && r.DATE
             );
 
+            console.log('Selected event:', event);
+            console.log('Selected athletes:', selectedAthletes);
+            console.log('Filtered results:', eventResults.length);
+
             if (eventResults.length === 0) {
-                document.getElementById('progressionChart').innerHTML = '<p style="color: #999; padding: 40px; text-align: center;">No results found for the selected criteria</p>';
+                // More detailed error message
+                const allEventsForAthletes = allResults.filter(r => selectedAthletes.includes(r.ATHLETE));
+                const uniqueEvents = [...new Set(allEventsForAthletes.map(r => String(r.EVENT)))];
+                document.getElementById('progressionChart').innerHTML =
+                    `<p style="color: #999; padding: 40px; text-align: center;">
+                        No results found for ${event} with selected athletes.<br>
+                        <small>Available events for selected athletes: ${uniqueEvents.join(', ')}</small>
+                    </p>`;
                 return;
             }
 
@@ -484,7 +497,9 @@ html_content += """
                         y: athleteResults.map(r => r['Result (Seconds / Meters)']),
                         mode: 'lines+markers',
                         name: athlete,
-                        type: 'scatter'
+                        type: 'scatter',
+                        text: athleteResults.map(r => r.MEET),
+                        hovertemplate: '<b>%{text}</b><br>Date: %{x|%Y-%m-%d}<br>Time: %{y}<extra></extra>'
                     });
                 }
             });
@@ -492,7 +507,7 @@ html_content += """
             const layout = {
                 title: event + ' Progression',
                 xaxis: { title: 'Date' },
-                yaxis: { title: 'Performance', autorange: 'reversed' },  // Lower is better for time events
+                yaxis: { title: 'Performance (seconds/meters)', autorange: 'reversed' },  // Lower is better for time events
                 hovermode: 'closest',
                 showlegend: true,
                 plot_bgcolor: '#f8f9fa',
