@@ -21,6 +21,14 @@ athletes_df = athletes_df.dropna(subset=['Athlete'])
 meets_df = meets_df.dropna(subset=['Meet'])
 results_df = results_df.dropna(subset=['ATHLETE', 'EVENT'])
 
+# Merge results with meets to get dates
+results_with_dates = results_df.merge(
+    meets_df[['Meet', 'DATE']],
+    left_on='MEET',
+    right_on='Meet',
+    how='left'
+)
+
 print(f"Loaded: {len(athletes_df)} athletes, {len(meets_df)} meets, {len(results_df)} results")
 
 # Generate HTML dashboard
@@ -186,6 +194,7 @@ html_content = """
                 <button class="tab" onclick="showTab('meets')">Meets</button>
                 <button class="tab" onclick="showTab('results')">Results</button>
                 <button class="tab" onclick="showTab('prs')">Personal Records</button>
+                <button class="tab" onclick="showTab('progression')">Progression</button>
             </div>
 
             <div id="athletes-content" class="tab-content active">
@@ -309,6 +318,44 @@ html_content += """
                 </select>
                 <div id="prTable"></div>
             </div>
+
+            <div id="progression-content" class="tab-content">
+                <h2>Progression Over Time</h2>
+                <p style="color: #666; margin-bottom: 20px;">Select an event and athletes to view progression:</p>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Event:</label>
+                        <select id="progressionEvent" class="search-box" onchange="updateProgression()">
+                            <option value="">-- Select Event --</option>
+"""
+
+# Add unique events for progression
+unique_events = [str(e) for e in results_df['EVENT'].unique() if pd.notna(e)]
+unique_events = sorted(unique_events)
+for event in unique_events:
+    html_content += f'<option value="{event}">{event}</option>\n'
+
+html_content += """
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Athletes (hold Ctrl/Cmd to select multiple):</label>
+                        <select id="progressionAthletes" class="search-box" multiple style="height: 150px;" onchange="updateProgression()">
+"""
+
+# Add athlete options for progression
+for _, athlete in athletes_df.iterrows():
+    name = athlete.get('Athlete', '')
+    if pd.notna(name):
+        html_content += f'<option value="{name}">{name}</option>\n'
+
+html_content += """
+                        </select>
+                    </div>
+                </div>
+                <div id="progressionChart" style="width: 100%; height: 500px;"></div>
+            </div>
         </div>
 
         <div class="footer">
@@ -350,8 +397,8 @@ html_content += """
             }
         }
 
-        // Store all results for PR calculation
-        const allResults = """ + results_df.to_json(orient='records') + """;
+        // Store all results for PR calculation (with dates)
+        const allResults = """ + results_with_dates.to_json(orient='records', date_format='iso') + """;
 
         // Show PRs for selected athlete
         function showPRs() {
@@ -388,17 +435,71 @@ html_content += """
             });
 
             // Build PR table
-            let html = '<table style="margin-top: 20px;"><thead><tr><th>Event</th><th>PR</th><th>Meet</th></tr></thead><tbody>';
+            let html = '<table style="margin-top: 20px;"><thead><tr><th>Event</th><th>PR</th><th>Meet</th><th>Date</th></tr></thead><tbody>';
             Object.keys(prs).sort().forEach(event => {
                 const pr = prs[event];
+                const date = pr.DATE ? new Date(pr.DATE).toLocaleDateString() : 'N/A';
                 html += `<tr>
                     <td>${event}</td>
                     <td><span class="pr-badge">${pr['Result (Seconds / Meters)']}</span></td>
                     <td>${pr.MEET}</td>
+                    <td>${date}</td>
                 </tr>`;
             });
             html += '</tbody></table>';
             prTableDiv.innerHTML = html;
+        }
+
+        // Progression chart
+        function updateProgression() {
+            const event = document.getElementById('progressionEvent').value;
+            const athleteSelect = document.getElementById('progressionAthletes');
+            const selectedAthletes = Array.from(athleteSelect.selectedOptions).map(opt => opt.value);
+
+            if (!event || selectedAthletes.length === 0) {
+                document.getElementById('progressionChart').innerHTML = '<p style="color: #999; padding: 40px; text-align: center;">Select an event and at least one athlete to view progression</p>';
+                return;
+            }
+
+            // Filter results for selected event and athletes
+            const eventResults = allResults.filter(r =>
+                r.EVENT === event && selectedAthletes.includes(r.ATHLETE) && r.DATE
+            );
+
+            if (eventResults.length === 0) {
+                document.getElementById('progressionChart').innerHTML = '<p style="color: #999; padding: 40px; text-align: center;">No results found for the selected criteria</p>';
+                return;
+            }
+
+            // Group by athlete
+            const traces = [];
+            selectedAthletes.forEach(athlete => {
+                const athleteResults = eventResults
+                    .filter(r => r.ATHLETE === athlete)
+                    .sort((a, b) => new Date(a.DATE) - new Date(b.DATE));
+
+                if (athleteResults.length > 0) {
+                    traces.push({
+                        x: athleteResults.map(r => new Date(r.DATE)),
+                        y: athleteResults.map(r => r['Result (Seconds / Meters)']),
+                        mode: 'lines+markers',
+                        name: athlete,
+                        type: 'scatter'
+                    });
+                }
+            });
+
+            const layout = {
+                title: event + ' Progression',
+                xaxis: { title: 'Date' },
+                yaxis: { title: 'Performance', autorange: 'reversed' },  // Lower is better for time events
+                hovermode: 'closest',
+                showlegend: true,
+                plot_bgcolor: '#f8f9fa',
+                paper_bgcolor: 'white'
+            };
+
+            Plotly.newPlot('progressionChart', traces, layout, {responsive: true});
         }
     </script>
 </body>
@@ -406,7 +507,7 @@ html_content += """
 """
 
 # Write HTML file
-output_file = "waza-dashboard.html"
+output_file = "index.html"
 with open(output_file, 'w', encoding='utf-8') as f:
     f.write(html_content)
 
