@@ -504,17 +504,51 @@ html_content += """
                 }
             });
 
+            // Helper function to format seconds as MM:SS.xx
+            function formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = (seconds % 60).toFixed(2);
+                return mins > 0 ? `${mins}:${secs.padStart(5, '0')}` : `${secs}s`;
+            }
+
             const layout = {
                 title: event + ' Progression',
                 xaxis: { title: 'Date' },
-                yaxis: { title: 'Performance (seconds/meters)', autorange: 'reversed' },  // Lower is better for time events
+                yaxis: {
+                    title: 'Performance',
+                    autorange: 'reversed',  // Lower is better for time events
+                    tickformat: '',
+                    tickmode: 'auto',
+                    ticksuffix: ''
+                },
                 hovermode: 'closest',
                 showlegend: true,
                 plot_bgcolor: '#f8f9fa',
                 paper_bgcolor: 'white'
             };
 
-            Plotly.newPlot('progressionChart', traces, layout, {responsive: true});
+            // Update hover template to show formatted time
+            traces.forEach(trace => {
+                trace.hovertemplate = '<b>%{text}</b><br>Date: %{x|%Y-%m-%d}<br>Time: %{customdata}<extra></extra>';
+                trace.customdata = trace.y.map(formatTime);
+            });
+
+            const config = {
+                responsive: true,
+                displayModeBar: true
+            };
+
+            Plotly.newPlot('progressionChart', traces, layout, config).then(function(gd) {
+                // Format y-axis tick labels as MM:SS.xx
+                const yaxis = gd._fullLayout.yaxis;
+                const tickvals = yaxis.tickvals;
+                const ticktext = tickvals.map(formatTime);
+
+                Plotly.relayout(gd, {
+                    'yaxis.tickvals': tickvals,
+                    'yaxis.ticktext': ticktext
+                });
+            });
         }
     </script>
 </body>
