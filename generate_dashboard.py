@@ -32,6 +32,12 @@ results_with_dates = results_df.merge(
     how='left'
 )
 
+# Sort meets by date (newest first)
+meets_df = meets_df.sort_values('DATE', ascending=False, na_position='last')
+
+# Sort results by date (newest first)
+results_with_dates = results_with_dates.sort_values('DATE', ascending=False, na_position='last')
+
 print(f"Loaded: {len(athletes_df)} athletes, {len(meets_df)} meets, {len(results_df)} results")
 
 # Generate HTML dashboard
@@ -282,12 +288,21 @@ html_content += """
                     <tbody>
 """
 
-# Add results
-for _, result in results_df.iterrows():
+# Add results (with dates from merged dataframe)
+for _, result in results_with_dates.iterrows():
     athlete = result.get('ATHLETE', '')
     event = result.get('EVENT', '')
     performance = result.get('Result (Seconds / Meters)', '')
     meet = result.get('MEET', '')
+    date = result.get('DATE', '')
+    # Format date if it exists
+    if pd.notna(date):
+        try:
+            date_str = pd.to_datetime(date).strftime('%Y-%m-%d')
+        except:
+            date_str = str(date)
+    else:
+        date_str = ''
 
     html_content += f"""
                         <tr>
@@ -295,7 +310,7 @@ for _, result in results_df.iterrows():
                             <td>{event}</td>
                             <td>{performance}</td>
                             <td>{meet}</td>
-                            <td></td>
+                            <td>{date_str}</td>
                         </tr>
     """
 
