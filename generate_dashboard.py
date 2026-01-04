@@ -21,6 +21,9 @@ athletes_df = athletes_df.dropna(subset=['Athlete'])
 meets_df = meets_df.dropna(subset=['Meet'])
 results_df = results_df.dropna(subset=['ATHLETE', 'EVENT'])
 
+# Convert EVENT column to string for consistent comparison
+results_df['EVENT'] = results_df['EVENT'].astype(str)
+
 # Merge results with meets to get dates
 results_with_dates = results_df.merge(
     meets_df[['Meet', 'DATE']],
@@ -463,14 +466,18 @@ html_content += """
             }
 
             // Filter results for selected event and athletes
-            // Convert EVENT to string for comparison since some may be numbers
-            const eventResults = allResults.filter(r =>
-                String(r.EVENT) === String(event) && selectedAthletes.includes(r.ATHLETE) && r.DATE
-            );
+            // EVENT is already converted to string in Python, but double-check here
+            const eventResults = allResults.filter(r => {
+                const eventMatch = String(r.EVENT) === String(event);
+                const athleteMatch = selectedAthletes.includes(r.ATHLETE);
+                const hasDate = r.DATE != null && r.DATE !== '';
+                return eventMatch && athleteMatch && hasDate;
+            });
 
             console.log('Selected event:', event);
             console.log('Selected athletes:', selectedAthletes);
             console.log('Filtered results:', eventResults.length);
+            console.log('Sample result EVENT type:', eventResults.length > 0 ? typeof eventResults[0].EVENT : 'none');
 
             if (eventResults.length === 0) {
                 // More detailed error message
